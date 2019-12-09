@@ -1,6 +1,7 @@
 module IntCode (runMachine) where
 
-import Data.Sequence (Seq(..), index, insertAt)
+import Debug.Trace (trace)
+import Data.Sequence (Seq(..), index, insertAt, update, (!?))
 import qualified Data.Sequence as Seq
 
 type Memory = Seq Int
@@ -16,20 +17,23 @@ data Computer = Computer {
     input :: Input,
     output :: Output } deriving (Show)
 
+err :: String -> Computer -> String
+err s c = s ++ " IP: " ++ show (ip c) ++ " mem: " ++ show (memory c)
+
 runInstruction :: Computer -> Computer
 runInstruction c =
-    let
-        i = index (memory c) (ip c)
-    in case i of
-        1 -> math (+) c
-        2 -> math (*) c
-        3 -> cio INPUT c
-        4 -> cio OUTPUT c
-        x -> error $ "Bad instruction " ++ show x
+    case memory c !? ip c of
+        Nothing -> error $ err "Bad instruction lookup." c
+        Just i -> case i of
+            1 -> math (+) c
+            2 -> math (*) c
+            3 -> cio INPUT c
+            4 -> cio OUTPUT c
+            _ -> error $ err "Bad instruction." c
 
 math :: (Int -> Int -> Int) -> Computer -> Computer
 math op c
-    | length (memory c) < ip c + 3 = error $ "Out of range math. ip = " ++ show (ip c)
+    | length (memory c) < ip c + 3 = error $ err "Out of range math." c
     | otherwise =
         let
             ipc = ip c
@@ -37,48 +41,47 @@ math op c
             y = index (memory c) (ipc + 2)
             o = index (memory c) (ipc + 3)
         in
-            c {
-                memory = insertAt o (x `op` y) (memory c),
-                ip = ipc + 4
-            }
+            let
+                xv = index (memory c) x
+                yv = index (memory c) y
+            in
+                c {
+                    memory = update o (xv `op` yv) (memory c),
+                    ip = ipc + 4
+                }
 
 cio :: IOType -> Computer -> Computer
-cio i c
-    | length (memory c) < ip c + 1 = error $ "Out of range io. ip = " ++ show (ip c)
-    | i == INPUT =
-        let
-            ipc = ip c
-            o = index (memory c) (ipc + 1)
-        in
-            c {
-                memory = insertAt o (head $ input c) (memory c),
-                ip = ipc + 2,
+cio i c =
+    case i of
+        INPUT -> case memory c !? (ip c + 1) of
+            Nothing -> error $ err "Bad INPUT instruction." c
+            Just il -> c {
+                memory = insertAt il (head $ input c) (memory c),
+                ip = ip c + 2,
                 input = tail $ input c
             }
-    | i == OUTPUT =
-        let
-            ipc = ip c
-            o = index (memory c) (ipc + 1)
-        in
-            c {
-                ip = ipc + 2,
-                output = index (memory c) o : output c
+        OUTPUT -> case memory c !? (ip c + 1) of
+            Nothing -> error $ err "Bad OUTPUT instruction." c
+            Just ol -> c {
+                ip = ip c + 2,
+                output = case memory c !? ol of
+                    Nothing -> error $ err "Bad OUTPUT origin." c
+                    Just x -> x : output c
             }
-    | otherwise =
-        error "Unknown CIO"
 
 runMachine' :: Computer -> (Int, Output)
 runMachine' c =
-    if
-        index (memory c) (ip c) == 99
-    then
-        let
-            zeroth = index (memory c) 0
-            output' = output c
-        in
-            (zeroth, output')
-    else
-        runMachine' $ runInstruction c
+    case memory c !? ip c of
+        Nothing -> error $ err "Bad instruction index." c
+        Just 99 ->
+            let
+                zeroth = case memory c !? 0 of
+                    Nothing -> error $ err "Empty memory." c
+                    Just x -> x
+                output' = output c
+            in
+                (zeroth, output')
+        Just _ -> runMachine' $ runInstruction c
 
 
 -- Takes in initial memory and input, returns ending first cell + output
