@@ -1,50 +1,49 @@
 import Test.Hspec
--- import Test.QuickCheck
--- import Control.Exception (evaluate)
-import IntCode (runMachine)
+import IntCode (runMachine, HaltMode (RUNALL, PIPEMODE))
 
 main :: IO ()
 main = hspec $ do
+    let runMachineThrough = runMachine RUNALL
     describe "Day 2" $ do
         it "calculates using opcodes 1 and 2" $
-            runMachine [1,9,10,3,2,3,11,0,99,30,40,50] [] `shouldBe` (3500 ,[])
+            runMachineThrough [1,9,10,3,2,3,11,0,99,30,40,50] [] `shouldBe` (3500 ,[])
         it "overwrites middle values" $
-            runMachine [1,1,1,4,99,5,6,0,99] [] `shouldBe` (30, [])
+            runMachineThrough [1,1,1,4,99,5,6,0,99] [] `shouldBe` (30, [])
     describe "Day 5" $ do
         it "Echos input to output" $
-            runMachine [3,0,4,0,99] [44] `shouldBe` (44, [44])
+            runMachineThrough [3,0,4,0,99] [44] `shouldBe` (44, [44])
         it "Handles immediate mode" $
-            runMachine [1002,4,3,4,33] [] `shouldBe` (1002, [])
+            runMachineThrough [1002,4,3,4,33] [] `shouldBe` (1002, [])
         it "Handles negative immediate numbers" $
-            runMachine [1101,100,-1,4,0] [] `shouldBe` (1101, [])
+            runMachineThrough [1101,100,-1,4,0] [] `shouldBe` (1101, [])
         it "Runs all diagnostic tests" $
-            runMachine diagnostic [1] `shouldBe` (3,[5821753,0,0,0,0,0,0,0,0,0])
+            runMachineThrough diagnostic [1] `shouldBe` (3,[5821753,0,0,0,0,0,0,0,0,0])
         it "Using position mode, consider whether the input is equal to 8" $
-            runMachine [3,9,8,9,10,9,4,9,99,-1,8] [8] `shouldBe` (3, [1])
+            runMachineThrough [3,9,8,9,10,9,4,9,99,-1,8] [8] `shouldBe` (3, [1])
         it "Using position mode, consider whether the input is not equal to 8" $
-            runMachine [3,9,8,9,10,9,4,9,99,-1,8] [9] `shouldBe` (3, [0])
+            runMachineThrough [3,9,8,9,10,9,4,9,99,-1,8] [9] `shouldBe` (3, [0])
         it "Using position mode, consider whether the input is less than 8" $
-            runMachine [3,9,7,9,10,9,4,9,99,-1,8] [7] `shouldBe` (3, [1])
+            runMachineThrough [3,9,7,9,10,9,4,9,99,-1,8] [7] `shouldBe` (3, [1])
         it "Using position mode, consider whether the input is not less than 8" $
-            runMachine [3,9,7,9,10,9,4,9,99,-1,8] [8] `shouldBe` (3, [0])
+            runMachineThrough [3,9,7,9,10,9,4,9,99,-1,8] [8] `shouldBe` (3, [0])
         it "Using immediate mode, consider whether the input is equal to 8" $
-            runMachine [3,3,1108,-1,8,3,4,3,99] [8] `shouldBe` (3, [1])
+            runMachineThrough [3,3,1108,-1,8,3,4,3,99] [8] `shouldBe` (3, [1])
         it "Using immediate mode, consider whether the input is not equal to 8" $
-            runMachine [3,3,1108,-1,8,3,4,3,99] [9] `shouldBe` (3, [0])
+            runMachineThrough [3,3,1108,-1,8,3,4,3,99] [9] `shouldBe` (3, [0])
         it "Using immediate mode, consider whether the input is less than 8" $
-            runMachine [3,3,1107,-1,8,3,4,3,99] [7] `shouldBe` (3, [1])
+            runMachineThrough [3,3,1107,-1,8,3,4,3,99] [7] `shouldBe` (3, [1])
         it "Using immediate mode, consider whether the input is not less than 8" $
-            runMachine [3,3,1107,-1,8,3,4,3,99] [8] `shouldBe` (3, [0])
+            runMachineThrough [3,3,1107,-1,8,3,4,3,99] [8] `shouldBe` (3, [0])
         it "Should jump properly using position mode, if the input is 0 output 0" $
-            runMachine [3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9] [0] `shouldBe` (3, [0])
+            runMachineThrough [3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9] [0] `shouldBe` (3, [0])
         it "Should jump properly using position mode, if the input is nonzero output 1" $
-            runMachine [3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9] [2] `shouldBe` (3, [1])
+            runMachineThrough [3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9] [2] `shouldBe` (3, [1])
         it "Should output 999 if the input is below 8" $
-            runMachine greaterEqualLess [4] `shouldBe` (3, [999])
+            runMachineThrough greaterEqualLess [4] `shouldBe` (3, [999])
         it "Should output 1000 if the input is equal to 8" $
-            runMachine greaterEqualLess [8] `shouldBe` (3, [1000])
+            runMachineThrough greaterEqualLess [8] `shouldBe` (3, [1000])
         it "Should output 1001 if the input is greater than 8" $
-            runMachine greaterEqualLess [10] `shouldBe` (3, [1001])
+            runMachineThrough greaterEqualLess [10] `shouldBe` (3, [1001])
 
 
 diagnostic :: [Int]

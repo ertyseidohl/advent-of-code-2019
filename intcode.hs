@@ -1,4 +1,4 @@
-module IntCode (runMachine) where
+module IntCode (runMachine, HaltMode (RUNALL, PIPEMODE)) where
 
 import Debug.Trace (trace)
 import Data.Sequence (Seq(..), index, update, fromList, (!?))
@@ -7,7 +7,7 @@ import Data.List (unfoldr)
 import Data.Tuple (swap)
 
 debug :: Bool
-debug = True
+debug = False
 
 type Memory = Seq Int
 type Input = [Int]
@@ -16,12 +16,14 @@ type IP = Int
 
 data IOType = INPUT | OUTPUT deriving (Eq)
 data Mode = IMMEDIATE | POSITION deriving (Eq, Show)
+data HaltMode = RUNALL | PIPEMODE deriving (Eq, Show)
 
 data Computer = Computer {
     memory :: Memory,
     ip :: IP,
     input :: Input,
-    output :: Output } deriving (Show)
+    output :: Output,
+    haltMode :: HaltMode } deriving (Show)
 
 data Instruction = Instruction {
     i :: Int,
@@ -83,7 +85,6 @@ math op inst c
                 xv = if m0 inst == IMMEDIATE then x else index (memory c) x
                 yv = if m1 inst == IMMEDIATE then y else index (memory c) y
             in
-                trace (show xv ++ ", " ++ show yv ++ ", " ++ show (xv `op` yv)) $
                 c {
                     memory = update' o (xv `op` yv) (memory c),
                     ip = ipc + 4
@@ -160,14 +161,15 @@ runMachine' trace' c =
             else runMachine' trace' $ runInstruction c
 
 -- Takes in initial memory and input, returns ending first cell + output
-runMachine :: [Int] -> [Int] -> (Int, [Int])
-runMachine initMem input' =
+runMachine :: HaltMode -> [Int] -> [Int] -> (Int, [Int])
+runMachine haltMode' initMem input' =
     let
         c = Computer {
             memory = Seq.fromList initMem,
             input = input',
             output = [],
-            ip = 0
+            ip = 0,
+            haltMode = haltMode'
         }
     in
         runMachine' debug c
