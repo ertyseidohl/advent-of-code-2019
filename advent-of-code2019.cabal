@@ -18,10 +18,27 @@ extra-source-files:  CHANGELOG.md
 
 executable advent-of-code2019
   main-is:             day5-1.hs
-  -- other-modules:
+  other-modules:
+    IntCode
   -- other-extensions:
   build-depends:
     base >=4.12 && <4.13
     , containers
+    , QuickCheck
   -- hs-source-dirs:
   default-language:    Haskell2010
+
+
+executable intcode-spec
+  main-is:             intcode-spec.hs
+  other-modules:
+    IntCode
+  -- other-extensions:
+  build-depends:
+    base >=4.12 && <4.13
+    , containers
+    , hspec
+    , QuickCheck
+  -- hs-source-dirs:
+  default-language:    Haskell2010
+
