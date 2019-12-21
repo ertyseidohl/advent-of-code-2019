@@ -1,4 +1,4 @@
-module IntCode (runMachine, HaltMode (RUNALL, PIPEMODE)) where
+module IntCode (runMachine, yieldMachine) where
 
 import Debug.Trace (trace)
 import Data.Sequence (Seq(..), index, update, fromList, (!?))
@@ -16,14 +16,12 @@ type IP = Int
 
 data IOType = INPUT | OUTPUT deriving (Eq)
 data Mode = IMMEDIATE | POSITION deriving (Eq, Show)
-data HaltMode = RUNALL | PIPEMODE deriving (Eq, Show)
 
 data Computer = Computer {
     memory :: Memory,
     ip :: IP,
     input :: Input,
-    output :: Output,
-    haltMode :: HaltMode } deriving (Show)
+    output :: Output } deriving (Show)
 
 data Instruction = Instruction {
     i :: Int,
@@ -160,16 +158,52 @@ runMachine' trace' c =
             then runMachine' trace' $ trace (show c) $ runInstruction c
             else runMachine' trace' $ runInstruction c
 
+yieldMachine' :: Bool -> Computer -> (Int, Computer)
+yieldMachine' trace' c =
+    case memory c !? ip c of
+        Nothing -> error $ err "Bad instruction index." c
+        Just 99 ->
+            let
+                output' = output c
+            in
+                if trace'
+                then trace (show c) (head output', c)
+                else (head output', c)
+        -- Output
+        Just 4 ->
+            let
+                yield = runInstruction c
+            in
+                (head $ output yield, c)
+        Just _ ->
+            if trace'
+            then yieldMachine' trace' $ trace (show c) $ runInstruction c
+            else yieldMachine' trace' $ runInstruction c
+
+
+
 -- Takes in initial memory and input, returns ending first cell + output
-runMachine :: HaltMode -> [Int] -> [Int] -> (Int, [Int])
-runMachine haltMode' initMem input' =
+runMachine :: [Int] -> [Int] -> (Int, [Int])
+runMachine initMem input' =
     let
         c = Computer {
             memory = Seq.fromList initMem,
             input = input',
             output = [],
-            ip = 0,
-            haltMode = haltMode'
+            ip = 0
         }
     in
         runMachine' debug c
+
+-- Takes in initial memory and returns an input -> output fn
+yieldMachine :: [Int] -> [Int] -> (Int, Computer)
+yieldMachine initMem input' =
+    let
+        c = Computer {
+            memory = Seq.fromList initMem,
+            input = input',
+            output = [],
+            ip = 0
+        }
+    in
+        yieldMachine' debug c

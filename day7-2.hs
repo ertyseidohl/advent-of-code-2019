@@ -1,5 +1,7 @@
 import Data.List (permutations)
-import IntCode (runMachine)
+import IntCode (yieldMachine, Computer)
+import Data.Sequence (Seq(..), index, update, fromList, (!?))
+import qualified Data.Sequence as Seq
 
 getRawInput :: IO String
 getRawInput = readFile "./day7.input"
@@ -14,33 +16,21 @@ type InputSignal = Int
 type OutputSignal = Int
 type Phase = Int
 
-ampRunner :: [Int] -> Phase -> InputSignal -> OutputSignal
-ampRunner intCode phase input =
-    let
-        output = runMachine intCode [phase, input]
-    in head $ snd output
-
 allPerms :: [[Phase]]
 allPerms = permutations [5..9]
 
-runAmps :: [InputSignal -> OutputSignal] -> OutputSignal
-runAmps = foldr (\a i -> a i) 0
+getAmps :: [Int] -> Seq yieldMachine
+getAmps intCode = map (yieldMachine intCode) allPerms
 
-maxAmpOutput :: (Phase -> InputSignal -> OutputSignal) -> OutputSignal
-maxAmpOutput ampCode =
-    let
-        perms = allPerms
-        allAmps = map (map ampCode) perms
-    in
-        maximum $ map runAmps allAmps
+
 
 main :: IO ()
 main = do
     input <- getRawInput
     let splitInput = split input
     let intCode = map read splitInput :: [Int]
-    let maxOut = maxAmpOutput (ampRunner intCode)
-    print maxOut
+    let amps = getAmps intCode
+    print $ show $ take 3 amps
 
 
 
