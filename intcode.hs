@@ -1,4 +1,4 @@
-module IntCode (runMachine, yieldMachine) where
+module IntCode (runMachine, Computer (..), Status (..), err, runInstruction) where
 
 import Debug.Trace (trace)
 import Data.Sequence (Seq(..), index, update, fromList, (!?))
@@ -16,12 +16,15 @@ type IP = Int
 
 data IOType = INPUT | OUTPUT deriving (Eq)
 data Mode = IMMEDIATE | POSITION deriving (Eq, Show)
+data Status = RUNNING | READING | WRITING | HALTED deriving (Eq, Show)
 
 data Computer = Computer {
     memory :: Memory,
     ip :: IP,
     input :: Input,
-    output :: Output } deriving (Show)
+    output :: Output,
+    status :: Status,
+    phase :: Int } deriving (Show)
 
 data Instruction = Instruction {
     i :: Int,
@@ -31,7 +34,7 @@ data Instruction = Instruction {
     } deriving (Show)
 
 err :: String -> Computer -> String
-err s c = s ++ " IP: " ++ show (ip c) ++ " mem: " ++ show (memory c)
+err s c = s ++ " " ++ show c
 
 digits :: Int -> Seq Int
 digits d = pad 5 $ digits' d
@@ -55,16 +58,24 @@ runInstruction c =
     case memory c !? ip c of
         Nothing -> error $ err "Bad instruction lookup." c
         Just l -> let inst = toInstruction l in
-            case i inst of
-                1 -> math (+) inst c
-                2 -> math (*) inst c
-                3 -> cio INPUT inst c
-                4 -> cio OUTPUT inst c
-                5 -> jump (/= 0) inst c
-                6 -> jump (== 0) inst c
-                7 -> math (\x y -> if x < y then 1 else 0) inst c
-                8 -> math (\x y -> if x == y then 1 else 0) inst c
-                _ -> error $ err "Bad instruction." c
+            let newC = case i inst of
+                    1 -> math (+) inst c
+                    2 -> math (*) inst c
+                    3 -> cio INPUT inst c
+                    4 -> cio OUTPUT inst c
+                    5 -> jump (/= 0) inst c
+                    6 -> jump (== 0) inst c
+                    7 -> math (\x y -> if x < y then 1 else 0) inst c
+                    8 -> math (\x y -> if x == y then 1 else 0) inst c
+                    99 -> c {status = HALTED}
+                    _ -> error $ err "Bad instruction." c
+            in
+                if debug
+                then
+                    if i inst == 3
+                    then trace (show c) trace (show newC) newC
+                    else trace (show newC) newC
+                else newC
 
 update' :: Int -> Int -> Seq Int -> Seq Int
 update' ix e s = if ix < length s then update ix e s else update' ix e (s Seq.|> 0)
@@ -84,8 +95,9 @@ math op inst c
                 yv = if m1 inst == IMMEDIATE then y else index (memory c) y
             in
                 c {
-                    memory = update' o (xv `op` yv) (memory c),
-                    ip = ipc + 4
+                    memory = update' o (xv `op` yv) (memory c)
+                    , ip = ipc + 4
+                    , status = RUNNING
                 }
 
 cio :: IOType -> Instruction -> Computer -> Computer
@@ -95,21 +107,25 @@ cio iotype inst c =
             Nothing -> error $ err "Bad INPUT instruction." c
             Just il ->
                 case input c of
-                    [] -> error $ err "Reading INPUT from empty list." c
+                    [] -> c {
+                        status = READING
+                    }
                     xs -> c {
-                        memory = update' il (head xs) (memory c),
-                        ip = ip c + 2,
-                        input = tail xs
+                        memory = update' il (head xs) (memory c)
+                        , ip = ip c + 2
+                        , input = tail xs
+                        , status = RUNNING
                     }
         OUTPUT -> case memory c !? (ip c + 1) of
             Nothing -> error $ err "Bad OUTPUT instruction." c
             Just ol -> c {
-                ip = ip c + 2,
-                output = if m0 inst == IMMEDIATE
+                ip = ip c + 2
+                , output = if m0 inst == IMMEDIATE
                     then ol : output c
                     else case memory c !? ol of
                         Nothing -> error $ err "Bad OUTPUT origin." c
                         Just x -> x : output c
+                , status = WRITING
             }
 
 jump :: (Int -> Bool) -> Instruction -> Computer -> Computer
@@ -132,78 +148,39 @@ jump test inst c =
                             else case memory c !? toJump of
                                 Nothing -> error $ err "Bad jump target." c
                                 Just jumpLoc -> jumpLoc
+                    , status = RUNNING
                 }
             else c {
                 ip = ip c + 3
+                , status = RUNNING
             }
 
 
-
-runMachine' :: Bool -> Computer -> (Int, Output)
-runMachine' trace' c =
-    case memory c !? ip c of
-        Nothing -> error $ err "Bad instruction index." c
-        Just 99 ->
+runMachine' :: Computer -> (Int, Output)
+runMachine' c =
+    let
+        newC = runInstruction c
+    in case status newC of
+        HALTED ->
             let
                 zeroth = case memory c !? 0 of
                     Nothing -> error $ err "Empty memory." c
                     Just x -> x
                 output' = output c
-            in
-                if trace'
-                then trace (show c) (zeroth, output')
-                else (zeroth, output')
-        Just _ ->
-            if trace'
-            then runMachine' trace' $ trace (show c) $ runInstruction c
-            else runMachine' trace' $ runInstruction c
-
-yieldMachine' :: Bool -> Computer -> (Int, Computer)
-yieldMachine' trace' c =
-    case memory c !? ip c of
-        Nothing -> error $ err "Bad instruction index." c
-        Just 99 ->
-            let
-                output' = output c
-            in
-                if trace'
-                then trace (show c) (head output', c)
-                else (head output', c)
-        -- Output
-        Just 4 ->
-            let
-                yield = runInstruction c
-            in
-                (head $ output yield, c)
-        Just _ ->
-            if trace'
-            then yieldMachine' trace' $ trace (show c) $ runInstruction c
-            else yieldMachine' trace' $ runInstruction c
-
-
+            in (zeroth, output')
+        _ -> runMachine' newC
 
 -- Takes in initial memory and input, returns ending first cell + output
 runMachine :: [Int] -> [Int] -> (Int, [Int])
 runMachine initMem input' =
     let
         c = Computer {
-            memory = Seq.fromList initMem,
-            input = input',
-            output = [],
-            ip = 0
+            memory = Seq.fromList initMem
+            , input = input'
+            , output = []
+            , ip = 0
+            , status = RUNNING
+            , phase = 0
         }
     in
-        runMachine' debug c
-
--- Takes in initial memory and returns an input -> output fn
-yieldMachine :: [Int] -> [Int] -> (Int, Computer)
-yieldMachine initMem input' =
-    let
-        c = Computer {
-            memory = Seq.fromList initMem,
-            input = input',
-            output = [],
-            ip = 0
-        }
-    in
-        yieldMachine' debug c
+        runMachine' c
