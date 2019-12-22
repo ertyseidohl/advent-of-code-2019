@@ -1,15 +1,17 @@
 module IntCode (runMachine, Computer (..), Status (..), err, runInstruction) where
 
 import Debug.Trace (trace)
-import Data.Sequence (Seq(..), index, update, fromList, (!?))
+import Data.Sequence (Seq(..))
 import qualified Data.Sequence as Seq
 import Data.List (unfoldr)
 import Data.Tuple (swap)
+import Data.IntMap.Lazy (IntMap)
+import qualified Data.IntMap.Lazy as IntMap
 
 debug :: Bool
 debug = False
 
-type Memory = Seq Int
+type Memory = IntMap Int
 type Input = [Int]
 type Output =  [Int]
 type IP = Int
@@ -43,19 +45,19 @@ pad :: Int -> Seq Int -> Seq Int
 pad l xs = if length xs == l then xs else pad l (0 Seq.<| xs)
 
 digits' :: Int -> Seq Int
-digits' = fromList . reverse . unfoldr (\x -> if x == 0 then Nothing else Just $ swap (divMod x 10))
+digits' = Seq.fromList . reverse . unfoldr (\x -> if x == 0 then Nothing else Just $ swap (divMod x 10))
 
 toInstruction :: Int -> Instruction
 toInstruction inst = let
     d = digits inst
-    in Instruction (inst `mod` 100) (toMode $ index d 2) (toMode $ index d 1) (toMode $ index d 0)
+    in Instruction (inst `mod` 100) (toMode $ Seq.index d 2) (toMode $ Seq.index d 1) (toMode $ Seq.index d 0)
 
 toMode :: Int -> Mode
 toMode int = if int == 1 then IMMEDIATE else POSITION
 
 runInstruction :: Computer -> Computer
 runInstruction c =
-    case memory c !? ip c of
+    case memory c IntMap.!? ip c of
         Nothing -> error $ err "Bad instruction lookup." c
         Just l -> let inst = toInstruction l in
             let newC = case i inst of
@@ -77,25 +79,22 @@ runInstruction c =
                     else trace (show newC) newC
                 else newC
 
-update' :: Int -> Int -> Seq Int -> Seq Int
-update' ix e s = if ix < length s then update ix e s else update' ix e (s Seq.|> 0)
-
 math :: (Int -> Int -> Int) -> Instruction -> Computer -> Computer
 math op inst c
     | length (memory c) < ip c + 3 = error $ err "Out of range math." c
     | otherwise =
         let
             ipc = ip c
-            x = index (memory c) (ipc + 1)
-            y = index (memory c) (ipc + 2)
-            o = index (memory c) (ipc + 3)
+            x = memory c IntMap.! (ipc + 1)
+            y = memory c IntMap.! (ipc + 2)
+            o = memory c IntMap.! (ipc + 3)
         in
             let
-                xv = if m0 inst == IMMEDIATE then x else index (memory c) x
-                yv = if m1 inst == IMMEDIATE then y else index (memory c) y
+                xv = if m0 inst == IMMEDIATE then x else memory c IntMap.! x
+                yv = if m1 inst == IMMEDIATE then y else memory c IntMap.! y
             in
                 c {
-                    memory = update' o (xv `op` yv) (memory c)
+                    memory = IntMap.insert o (xv `op` yv) (memory c)
                     , ip = ipc + 4
                     , status = RUNNING
                 }
@@ -103,7 +102,7 @@ math op inst c
 cio :: IOType -> Instruction -> Computer -> Computer
 cio iotype inst c =
     case iotype of
-        INPUT -> case memory c !? (ip c + 1) of
+        INPUT -> case memory c IntMap.!? (ip c + 1) of
             Nothing -> error $ err "Bad INPUT instruction." c
             Just il ->
                 case input c of
@@ -111,18 +110,18 @@ cio iotype inst c =
                         status = READING
                     }
                     xs -> c {
-                        memory = update' il (head xs) (memory c)
+                        memory = IntMap.insert il (head xs) (memory c)
                         , ip = ip c + 2
                         , input = tail xs
                         , status = RUNNING
                     }
-        OUTPUT -> case memory c !? (ip c + 1) of
+        OUTPUT -> case memory c IntMap.!? (ip c + 1) of
             Nothing -> error $ err "Bad OUTPUT instruction." c
             Just ol -> c {
                 ip = ip c + 2
                 , output = if m0 inst == IMMEDIATE
                     then ol : output c
-                    else case memory c !? ol of
+                    else case memory c IntMap.!? ol of
                         Nothing -> error $ err "Bad OUTPUT origin." c
                         Just x -> x : output c
                 , status = WRITING
@@ -130,22 +129,22 @@ cio iotype inst c =
 
 jump :: (Int -> Bool) -> Instruction -> Computer -> Computer
 jump test inst c =
-    case memory c !? (ip c + 1) of
+    case memory c IntMap.!? (ip c + 1) of
         Nothing -> error $ err "Bad jump first input." c
         Just toTest -> if test (
                 if m0 inst == IMMEDIATE
                 then toTest
-                else case memory c !? toTest of
+                else case memory c IntMap.!? toTest of
                     Nothing -> error $ err "Bad test memory location" c
                     Just loadedTest -> loadedTest
             )
             then
                 c {
-                    ip = case memory c !? (ip c + 2) of
+                    ip = case memory c IntMap.!? (ip c + 2) of
                         Nothing -> error $ err "Bad jump second input." c
                         Just toJump -> if m1 inst == IMMEDIATE
                             then toJump
-                            else case memory c !? toJump of
+                            else case memory c IntMap.!? toJump of
                                 Nothing -> error $ err "Bad jump target." c
                                 Just jumpLoc -> jumpLoc
                     , status = RUNNING
@@ -163,7 +162,7 @@ runMachine' c =
     in case status newC of
         HALTED ->
             let
-                zeroth = case memory c !? 0 of
+                zeroth = case memory c IntMap.!? 0 of
                     Nothing -> error $ err "Empty memory." c
                     Just x -> x
                 output' = output c
@@ -175,7 +174,7 @@ runMachine :: [Int] -> [Int] -> (Int, [Int])
 runMachine initMem input' =
     let
         c = Computer {
-            memory = Seq.fromList initMem
+            memory = IntMap.fromList $ zip [0..] initMem
             , input = input'
             , output = []
             , ip = 0
