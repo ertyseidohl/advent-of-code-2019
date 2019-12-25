@@ -1,5 +1,5 @@
 getRawInput :: IO String
-getRawInput = readFile "./day2.input"
+getRawInput = readFile "./day02.input"
 
 split :: String -> [String]
 split "" = []

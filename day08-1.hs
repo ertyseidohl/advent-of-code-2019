@@ -1,7 +1,9 @@
 import Data.Char (isDigit)
+import Data.List (elemIndex)
+import Debug.Trace (trace)
 
 getRawInput :: IO String
-getRawInput = readFile "./day8.input"
+getRawInput = readFile "./day08.input"
 
 type Layer = [[Int]]
 
@@ -27,29 +29,20 @@ toLayer width height input
         in
             curr : toLayer width height next
 
-combinePixel :: Int -> Int -> Int
-combinePixel 2 x = x
-combinePixel x _ = x
-
-combineRow :: [Int] -> [Int] -> [Int]
-combineRow = zipWith combinePixel
-
-combineLayers :: Layer -> Layer -> Layer
-combineLayers = zipWith combineRow
-
-combineImage :: [Layer] -> Layer
-combineImage = foldl1 combineLayers
-
-showImage :: Layer -> IO ()
-showImage [] = print ""
-showImage (r:rs) = do
-    print $ map (\x -> if x == 1 then "#" else ".") r
-    showImage rs
+numberOfDigits :: Int -> Layer -> Int
+numberOfDigits d layer =
+    let
+        filtered = map (filter (== d)) layer :: Layer
+        counted = map length filtered :: [Int]
+    in sum counted
 
 main :: IO ()
 main = do
     rawInput <- getRawInput
     let layers = splitLayers 25 6 rawInput
-    print layers
-    let image = combineImage layers
-    showImage image
+    let numZeros = map (numberOfDigits 0) layers
+    let maxZeros = minimum numZeros
+    let total = case elemIndex maxZeros numZeros of
+                    Nothing -> error "no max zeros layer?"
+                    Just i -> product [numberOfDigits 1 (layers !! i), numberOfDigits 2 (layers !! i)]
+    print total

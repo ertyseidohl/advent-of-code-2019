@@ -2,7 +2,7 @@ import Data.List (permutations)
 import IntCode (runMachine)
 
 getRawInput :: IO String
-getRawInput = readFile "./day7.input"
+getRawInput = readFile "./day07.input"
 
 split :: String -> [String]
 split "" = []

@@ -13,7 +13,7 @@ fuelcalc (s, c) = do
 
 
 getRawInput :: IO String
-getRawInput = readFile "./day1.input"
+getRawInput = readFile "./day01.input"
 
 getModules :: String -> [Int]
 getModules raw = do

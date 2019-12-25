@@ -1,7 +1,7 @@
 import IntCode (runMachine)
 
 getRawInput :: IO String
-getRawInput = readFile "./day5.input"
+getRawInput = readFile "./day09.input"
 
 split :: String -> [String]
 split "" = []
@@ -14,6 +14,6 @@ main = do
     input <- getRawInput
     let splitInput = split input
     let intCode = map read splitInput :: [Int]
-    let (zero, out) = runMachine intCode [5]
+    let (zero, out) = runMachine intCode [2]
     print zero
     print out

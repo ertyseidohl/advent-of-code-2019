@@ -5,7 +5,7 @@ import qualified Data.Sequence as Seq
 import Debug.Trace (trace)
 
 getRawInput :: IO String
-getRawInput = readFile "./day7.input"
+getRawInput = readFile "./day07.input"
 
 split :: String -> [String]
 split "" = []
@@ -30,7 +30,7 @@ genAmpSeq intCode phases =
             output = [],
             ip = 0,
             status = RUNNING,
-            phase = p
+            compId = p
         })
         phases
 
