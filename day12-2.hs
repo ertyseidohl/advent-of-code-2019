@@ -81,20 +81,21 @@ showMoons' :: [Moon] -> String
 showMoons' [] = ""
 showMoons' (m:ms) = show m ++ "\n" ++ showMoons' ms
 
-extractCoord :: (Vector3 -> Int) -> Moon -> Int
-extractCoord coord moon = coord $ pos moon
+extractCoord :: (Vector3 -> Int) -> Moon -> (Int, Int)
+extractCoord coord moon = (coord $ pos moon, coord $ vel moon)
 
 findPeriod :: (Vector3 -> Int) -> [Moon] -> Int
-findPeriod coord moons = findPeriod' 0 (map (extractCoord coord) moons) coord (step moons)
+findPeriod coord moons = findPeriod' 1 (map (extractCoord coord) moons) coord (step moons)
 
-findPeriod' :: Int -> [Int] -> (Vector3 -> Int) -> [Moon] -> Int
+findPeriod' :: Int -> [(Int, Int)] -> (Vector3 -> Int) -> [Moon] -> Int
 findPeriod' count startPos coord moons
     | startPos == map (extractCoord coord) moons = count
-    | otherwise = trace (show count ++ "\n" ++ showMoons' moons) $ findPeriod' (count + 1) startPos coord (step moons)
+    | otherwise = findPeriod' (count + 1) startPos coord (step moons)
 
 main :: IO ()
 main = do
     input <- getRawInput
     let moons = toMoons $ lines input
-    let periods = [findPeriod w moons | w <- [x] ]
+    let periods = [findPeriod w moons | w <- [x, y, z] ]
+    print periods
     print $ foldl1 lcm periods
