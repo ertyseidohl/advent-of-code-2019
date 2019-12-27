@@ -60,30 +60,35 @@ findProducer rs c
         in
             multr multiplier reaction
 
-givesOre :: Reaction -> Bool
-givesOre r = (== "ORE") $ name $ gives r
+rollUpOre :: [Reaction] -> Chem -> Int
+rollUpOre rs c = rollUpOre' rs [c] 0 (Map.empty :: Map String Int)
 
-rollUpOre :: [Reaction] -> Reaction -> Int
-rollUpOre rs r = rollUpOre' rs [r] 0 (Map.empty :: Map String Int)
+getIngredients :: [Reaction] -> Chem -> Store -> ([Chem], Store)
+getIngredients reactions needed store =
+    let
+        reaction = findProducer reactions needed :: Reaction
+        ingredients = uses reaction
+        produced = gives reaction
+        leftover = amt produced - amt needed
+    in
+        (ingredients, )
 
-expand :: Reaction -> ([Reaction] -> Store)
-expand r =
 
-rollUpOre' :: [Reaction] -> [Reaction] -> Int -> Store -> Int
+rollUpOre' :: [Reaction] -> [Chem] -> Int -> Store -> Int
 rollUpOre' _ [] orecount _ = orecount
 rollUpOre' reactions (curr:rest) orecount store
-    | givesOre curr = rollUpOre' reactions rest (orecount + amt (gives curr)) store
+    | (== "ORE") $ name curr = rollUpOre' reactions rest (orecount + amt curr) store
     | otherwise =
         let
-            (expanded, newstore) = expand curr store
+            (ingredients, newstore) = getIngredients reactions curr store
         in
-            rollUpOre' reactions (rest ++ expanded) orecount newstore
+            rollUpOre' reactions (rest ++ ingredients) orecount newstore
 
 main :: IO ()
 main = do
     input <- getRawInput
     let reactions = map toReaction $ lines input
-    let fuelReaction = head $ filter (produces "FUEL") reactions
-    let result = rollUpOre reactions fuelReaction
+    let fuel = Chem {amt = 1, name = "FUEL"}
+    let result = rollUpOre reactions fuel
     print result
 
