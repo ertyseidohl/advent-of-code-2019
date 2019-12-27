@@ -1,12 +1,12 @@
-import Debug.Trace (trace)
+-- import Debug.Trace (trace)
 import Data.Char (isDigit)
 
 getRawInput :: IO String
 getRawInput = readFile "./day14.input"
 
-data Chem = Chem {amt :: Int, name :: String}
+data Chem = Chem {amt :: Int, name :: String} deriving (Show, Eq)
 data Reaction = Reaction {uses :: [Chem], gives :: Chem}
-data RNode = RNode {chem :: Chem, children :: [Rnode]}
+data RNode = RNode {chem :: Chem, children :: [RNode]} deriving (Show)
 
 split :: Char -> String -> [String]
 split _ "" = []
@@ -18,34 +18,45 @@ toChem :: String -> Chem
 toChem (' ':rest) = toChem rest
 toChem s =
     let
-        amount = read $ takeWhile isDigit s :: Int
-        name = filter (/= ' ') $ dropWhile isDigit s
-    in Chem {amt = amount, name = name }
+        a = read $ takeWhile isDigit s :: Int
+        n = filter (/= ' ') $ dropWhile isDigit s
+    in Chem {amt = a, name = n }
 
 
 toReaction :: String -> Reaction
 toReaction s =
     let
-        uses = map toChem (split ',' (takeWhile (/='=') s))
-        gives = toChem $ tail (dropWhile (/='>') s)
-    in Reaction { uses = uses, gives = gives }
+        u = map toChem (split ',' (takeWhile (/='=') s))
+        g = toChem $ tail (dropWhile (/='>') s)
+    in Reaction { uses = u, gives = g }
 
-producesr :: String -> Reaction -> Bool
-producesr s = (== s) .  name . gives
+produces :: String -> Reaction -> Bool
+produces s = (== s) .  name . gives
 
 findProducer :: [Reaction] -> Chem -> Reaction
-findProducer rs c = head $ filter (producesr $ name c) rs
+findProducer rs c
+    | name c == "ORE" = Reaction { uses = [], gives = c }
+    | otherwise = head $ filter (produces $ name c) rs
 
-toTree :: [Reaction] -> Reaction -> RNode
-toTree rs root =
+toRNode :: [Reaction] -> Reaction -> RNode
+toRNode rs r =
+    RNode {
+        chem = gives r
+        , children = map (toRNode rs . findProducer rs) (uses r)
+    }
 
+-- rollUpOre :: RNode -> Int -> Int
+-- rollUpOre rn mult
+--     | name (chem rn) == "ORE" = mult * amt (chem rn)
+--     | otherwise = rollUpOre
 
 main :: IO ()
 main = do
     input <- getRawInput
     let reactions = map toReaction $ lines input
-    let fuelReaction = head . filter (producesr "FUEL") reactions
-    let otherReactions = filter (not . producesr "FUEL") reactions
-    reactionTree = toTree reactions fuelReaction
-    print oreAmount
+    let fuelReaction = head $ filter (produces "FUEL") reactions
+    let reactionTree = toRNode reactions fuelReaction
+    print reactionTree
+    -- let result = rollUpOre reactionTree 1
+    -- print result
 
