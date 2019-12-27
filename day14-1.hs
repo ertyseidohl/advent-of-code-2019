@@ -1,17 +1,12 @@
--- Actual sol'n in day14-1b.hs
-
--- import Debug.Trace (trace)
+import Debug.Trace (trace)
 import Data.Char (isDigit)
-import qualified Data.Map.Lazy as Map
-import Data.Map.Lazy (Map)
 
 getRawInput :: IO String
 getRawInput = readFile "./day14.input"
 
-data Chem = Chem {amt :: Int, name :: String} deriving (Show, Eq)
+data Chem = Chem {amt :: Int, name :: String} deriving (Eq, Show)
 data Reaction = Reaction {uses :: [Chem], gives :: Chem}
-
-type Store = Map String Int
+data RNode = RNode {chem :: Chem, children :: [RNode]} deriving (Show)
 
 split :: Char -> String -> [String]
 split _ "" = []
@@ -35,60 +30,49 @@ toReaction s =
         g = toChem $ tail (dropWhile (/='>') s)
     in Reaction { uses = u, gives = g }
 
-produces :: String -> Reaction -> Bool
-produces s = (== s) .  name . gives
-
-multr :: Int -> Reaction -> Reaction
-multr m r =
-    r {
-        uses = map (multc m) (uses r)
-    }
-
-multc :: Int -> Chem -> Chem
-multc m c =
-    c {
-        amt = amt c * m
-    }
+producesr :: String -> Reaction -> Bool
+producesr s = (== s) .  name . gives
 
 findProducer :: [Reaction] -> Chem -> Reaction
-findProducer rs c
-    | name c == "ORE" = Reaction { uses = [], gives = c }
-    | otherwise =
-        let
-            reaction = head $ filter (produces $ name c) rs
-            multiplier = max 1 $ amt c `div` amt (gives reaction)
-        in
-            multr multiplier reaction
+findProducer rs c = head $ filter (producesr $ name c) rs
 
-rollUpOre :: [Reaction] -> Chem -> Int
-rollUpOre rs c = rollUpOre' rs [c] 0 (Map.empty :: Map String Int)
+usesOre :: Reaction -> Bool
+usesOre r = isOre $ head (uses r)
 
-getIngredients :: [Reaction] -> Chem -> Store -> ([Chem], Store)
-getIngredients reactions needed store =
+isOre :: Chem -> Bool
+isOre c = (== "ORE") $ name c
+
+toTree :: [Reaction] -> Reaction -> RNode
+toTree rs r =
     let
-        reaction = findProducer reactions needed :: Reaction
-        ingredients = uses reaction
-        produced = gives reaction
-        leftover = amt produced - amt needed
+        c = gives r :: Chem
+        u = uses r :: [Chem]
+        p = map (findProducer rs) (filter (not . isOre) u) :: [Reaction]
+        ch = map (toTree rs) p :: [RNode]
     in
-        (ingredients, )
+        RNode {chem = c, children = ch}
 
+getTotal :: String -> RNode  -> Int
+getTotal s n
+    | name (chem n) == s = amt $ chem n
+    | otherwise = sum $ map (getTotal s) (children n)
 
-rollUpOre' :: [Reaction] -> [Chem] -> Int -> Store -> Int
-rollUpOre' _ [] orecount _ = orecount
-rollUpOre' reactions (curr:rest) orecount store
-    | (== "ORE") $ name curr = rollUpOre' reactions rest (orecount + amt curr) store
-    | otherwise =
-        let
-            (ingredients, newstore) = getIngredients reactions curr store
-        in
-            rollUpOre' reactions (rest ++ ingredients) orecount newstore
+rollUpOre :: RNode -> Reaction -> Int
+rollUpOre n curr =
+    let
+        totalNeeded = fromIntegral $ getTotal (name $ gives curr) n :: Float
+        totalGiven =  fromIntegral (amt $ gives curr) :: Float
+    in
+        trace (show (totalNeeded, totalGiven)) $ ceiling (totalNeeded / totalGiven)
+
 
 main :: IO ()
 main = do
     input <- getRawInput
     let reactions = map toReaction $ lines input
-    let fuel = Chem {amt = 1, name = "FUEL"}
-    let result = rollUpOre reactions fuel
-    print result
-
+    let fuelReaction = head $ filter (producesr "FUEL") reactions
+    let oreReactions = filter usesOre reactions
+    let reactionTree = toTree reactions fuelReaction
+    print reactionTree
+    let oreCounts = map (rollUpOre reactionTree) oreReactions
+    print oreCounts
