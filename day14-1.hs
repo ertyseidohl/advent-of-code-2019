@@ -1,12 +1,19 @@
-import Debug.Trace (trace)
+-- import Debug.Trace (trace)
 import Data.Char (isDigit)
+import Data.List
 
 getRawInput :: IO String
 getRawInput = readFile "./day14.input"
 
-data Chem = Chem {amt :: Int, name :: String} deriving (Eq, Show)
+data Chem = Chem {amt :: Int, name :: String}
 data Reaction = Reaction {uses :: [Chem], gives :: Chem}
 data RNode = RNode {chem :: Chem, children :: [RNode]} deriving (Show)
+
+instance Show Reaction where
+    show r = intercalate ", " (map show $ uses r) ++ " => " ++ show (gives r)
+
+instance Show Chem where
+    show c = show (amt c) ++ " " ++ name c
 
 split :: Char -> String -> [String]
 split _ "" = []
@@ -39,18 +46,23 @@ findProducer rs c = head $ filter (producesr $ name c) rs
 usesOre :: Reaction -> Bool
 usesOre r = isOre $ head (uses r)
 
+usesHowMuchOre :: Reaction -> Int
+usesHowMuchOre r = amt $ head (uses r)
+
 isOre :: Chem -> Bool
 isOre c = (== "ORE") $ name c
 
-toTree :: [Reaction] -> Reaction -> RNode
-toTree rs r =
+toTree :: [Reaction] -> Chem -> RNode
+toTree rs c =
     let
-        c = gives r :: Chem
-        u = uses r :: [Chem]
-        p = map (findProducer rs) (filter (not . isOre) u) :: [Reaction]
-        ch = map (toTree rs) p :: [RNode]
+        producer = findProducer rs c :: Reaction
+        amountProduced = fromIntegral $ amt (gives producer) :: Float
+        amountNeeded = fromIntegral (amt c) :: Float
+        multiplier = ceiling $ amountNeeded / amountProduced :: Int
+        used = filter (not . isOre) $ uses producer :: [Chem]
+        usedmultiplied = map (\u -> u {amt = amt u * multiplier}) used
     in
-        RNode {chem = c, children = ch}
+        RNode {chem = c, children = map (toTree rs) usedmultiplied}
 
 getTotal :: String -> RNode  -> Int
 getTotal s n
@@ -58,21 +70,20 @@ getTotal s n
     | otherwise = sum $ map (getTotal s) (children n)
 
 rollUpOre :: RNode -> Reaction -> Int
-rollUpOre n curr =
+rollUpOre node curr =
     let
-        totalNeeded = fromIntegral $ getTotal (name $ gives curr) n :: Float
+        totalNeeded = fromIntegral $ getTotal (name $ gives curr) node :: Float
         totalGiven =  fromIntegral (amt $ gives curr) :: Float
     in
-        trace (show (totalNeeded, totalGiven)) $ ceiling (totalNeeded / totalGiven)
-
+        ceiling (totalNeeded / totalGiven)
 
 main :: IO ()
 main = do
     input <- getRawInput
     let reactions = map toReaction $ lines input
-    let fuelReaction = head $ filter (producesr "FUEL") reactions
     let oreReactions = filter usesOre reactions
-    let reactionTree = toTree reactions fuelReaction
+    let reactionTree = toTree reactions Chem{name="FUEL", amt=1}
     print reactionTree
     let oreCounts = map (rollUpOre reactionTree) oreReactions
-    print oreCounts
+    let total = sum $ zipWith (*) oreCounts (map usesHowMuchOre oreReactions)
+    print total
